@@ -1,5 +1,6 @@
 import argparse
 import getpass
+
 from einar.__main__ import EinarManager
 from einar.exceptions import EinarError
 from einar.version import __version__
