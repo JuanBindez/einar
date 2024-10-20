@@ -1,9 +1,9 @@
 import argparse
 import getpass
 
-from einar import EinarManager
-from einar import EinarError
-from einar import __version__
+from einar.__main__ import EinarManager
+from einar.exceptions import EinarError
+from einar.version import __version__
 
 def main():
     parser = argparse.ArgumentParser(description="Einar Password Manager")
