@@ -2,11 +2,11 @@
 
 VERSION=0
 MINOR=0
-PATCH=1
+PATCH=2
 EXTRAVERSION=""
 
-NOTES="inial release"
-BRANCH="main"
+NOTES="update"
+BRANCH="dev"
 
 if [[ -z $PATCH ]]; then
     PATCH=""

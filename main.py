@@ -1,15 +1,3 @@
-# Einar
-
-## Python3 Password Manager Library.
-
-### Usage
-
-Importing EinarManager in Your Script
-
-You can create a Python script to use the EinarManager class. Below is an example of how to import and use it.
-
-```python
-
 from einar import EinarManager
 from einar.exceptions import EinarError
 
@@ -35,26 +23,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-```
-
-### Command-Line Interface (CLI) Usage
-
-You can use the following commands in the terminal to interact with Einar:
-
-```bash
-
-# Set Master Password
-einar -s <your_master_password>
-
-# Add Password
-einar -a <service> <username> <password>
-
-# View Passwords
-einar -v
-
-# Delete Password
-einar -d <service>
-
-```

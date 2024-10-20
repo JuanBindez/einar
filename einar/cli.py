@@ -1,52 +1,64 @@
 import argparse
-
-from einar import EinarManager
+import getpass
+from einar.__main__ import EinarManager
 from einar.exceptions import EinarError
+from einar.version import __version__
 
 def main():
-    parser = argparse.ArgumentParser(description="Einar: Password Manager CLI")
-    parser.add_argument('-s', '--set-master-password', type=str, help="Set the master password")
-    parser.add_argument('-a', '--add-password', nargs=3, metavar=('service', 'username', 'password'),
-                        help="Add a password for a specified service")
-    parser.add_argument('-v', '--view-passwords', type=str, help="View all stored passwords")
-    parser.add_argument('-d', '--delete-password', nargs=2, metavar=('service', 'master_password'),
-                        help="Delete a password entry for a specified service using the master password")
+    parser = argparse.ArgumentParser(description="Einar Password Manager")
+    
+    parser.add_argument("-s", "--set-password", action="store_true", help="Set the master password (first use)")
+    parser.add_argument("-a", "--add", nargs=3, metavar=('SERVICE', 'USERNAME', 'PASSWORD'), help="Add a new password")
+    parser.add_argument("-v", "--view", action="store_true", help="View all stored passwords")
+    parser.add_argument("-d", "--delete", metavar='SERVICE', help="Delete a password for a specific service")
+    parser.add_argument("-V", "--version", action="store_true", help="Show the version of Einar")
 
     args = parser.parse_args()
 
-    manager = EinarManager()
+    try:
+        if args.set_password:
+            master_password = getpass.getpass(prompt="Create the master password: ")
+            confirm_password = getpass.getpass(prompt="Confirm the master password: ")
+            if master_password != confirm_password:
+                print("Passwords do not match. Please try again.")
+                return
 
-    if args.set_master_password:
-        try:
-            manager.set_master_password(args.set_master_password)
-            print("Master password set successfully.")
-        except EinarError as e:
-            print(e)
+            manager = EinarManager(master_password)
+            print("Master password successfully set!")
 
-    if args.add_password:
-        service, username, password = args.add_password
-        try:
-            manager.add_password(service, username, password)
-            print(f"Password for {service} added successfully.")
-        except EinarError as e:
-            print(e)
+        else:
+            master_password = getpass.getpass(prompt="Enter the master password: ")
 
-    if args.view_passwords:
-        master_password = args.view_passwords
-        try:
-            passwords = manager.view_passwords(master_password)
-            for entry in passwords:
-                print(f"{entry['service']}:\n\tlogin = {entry['login']}\n\tpassword = {entry['password']}")
-        except EinarError as e:
-            print(e)
+            manager = EinarManager(master_password)
+            print("Access granted!")
 
-    if args.delete_password:
-        service, master_password = args.delete_password
-        try:
-            manager.delete_password(service, master_password)
-            print(f"Password for {service} deleted successfully.")
-        except EinarError as e:
-            print(e)
+            if args.add:
+                service, username, password = args.add
+                manager.add_password(service, username, password)
+                print(f"Password for service '{service}' has been successfully added!")
+
+            elif args.view:
+                passwords = manager.view_passwords()
+                if passwords:
+                    print("Stored passwords:")
+                    for entry in passwords:
+                        print(f"Service: {entry['service']}, Username: {entry['login']}, Password: {entry['password']}")
+                else:
+                    print("No passwords stored.")
+
+            elif args.delete:
+                service = args.delete
+                manager.delete_password(service)
+                print(f"Password for service '{service}' has been successfully deleted!")
+
+            elif args.version:
+                print(f"Einar version: {__version__}")
+
+            else:
+                print("No valid command was provided. Use --help to see the available options.")
+    
+    except EinarError as e:
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()

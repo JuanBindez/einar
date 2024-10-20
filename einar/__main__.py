@@ -24,29 +24,46 @@ from einar.exceptions import EinarError
 class EinarManager:
     """A simple password manager that securely stores and retrieves passwords."""
 
-    def __init__(self):
-        """Initializes the EinarManager without a master password."""
-        self.master_password_hash = None
-        self.key = Fernet.generate_key()
-        self.fernet = Fernet(self.key)
+    def __init__(self, master_password):
+        """Initializes the EinarManager with the provided master password."""
         self._create_db()
 
-    def set_master_password(self, master_password):
-        """Sets the master password for the EinarManager.
+        # Retrieve or generate the encryption key
+        self.key = self._get_or_create_key()
+        self.fernet = Fernet(self.key)
 
-        Args:
-            master_password (str): The master password to be stored securely.
+        # Flag to check if the password has been validated
+        self.password_validated = False
 
-        Raises:
-            EinarError: If the master password is already set.
-        """
-        if self.master_password_hash is not None:
-            raise EinarError("Master password is already set. Please use a different method to change it.")
-        
-        self.master_password_hash = self._hash_password(master_password)
+        # Check if master password already exists
+        self.master_password_hash = self._get_master_password_hash()
+        if self.master_password_hash is None:
+            # First time: save the master password
+            self.master_password_hash = self._hash_password(master_password)
+            self._save_master_password_hash(self.master_password_hash)
+            self.password_validated = True
+        else:
+            # Verify if the provided password matches the saved one
+            if self.check_master_password(master_password):
+                self.password_validated = True
+            else:
+                raise EinarError("Incorrect master password!")
+            
+    def _get_or_create_key(self):
+        """Retrieves the encryption key from the database or generates a new one if not found."""
+        self.c.execute("SELECT key FROM encryption_key WHERE id = 1")
+        result = self.c.fetchone()
+        if result:
+            return result[0]
+        else:
+            new_key = Fernet.generate_key()
+            self.c.execute("INSERT INTO encryption_key (id, key) VALUES (1, ?)", (new_key,))
+            self.conn.commit()
+            return new_key
 
     def _hash_password(self, password):
-        """Hashes the given password using SHA-256.
+        """
+        Hashes the given password using SHA-256.
 
         Args:
             password (str): The password to be hashed.
@@ -57,62 +74,89 @@ class EinarManager:
         return hashlib.sha256(password.encode()).hexdigest()
 
     def _create_db(self):
-        """Creates an in-memory SQLite database for storing passwords."""
-        self.conn = sqlite3.connect(':memory:')
+        """Creates or connects to the SQLite database for storing passwords, master password, and encryption key."""
+        self.conn = sqlite3.connect('passwords.db')  # Persist the data to disk
         self.c = self.conn.cursor()
-        self.c.execute('''CREATE TABLE passwords
+        self.c.execute('''CREATE TABLE IF NOT EXISTS passwords
                           (id INTEGER PRIMARY KEY, service TEXT, username TEXT, password TEXT)''')
+        self.c.execute('''CREATE TABLE IF NOT EXISTS master_password
+                          (id INTEGER PRIMARY KEY, password_hash TEXT)''')
+        self.c.execute('''CREATE TABLE IF NOT EXISTS encryption_key
+                          (id INTEGER PRIMARY KEY, key TEXT)''')
+        self.conn.commit()
 
-    def add_password(self, service, username, password):
-        """Adds a new password entry for a specified service.
+    def _get_master_password_hash(self):
+        """
+        Retrieves the master password hash from the database.
+
+        Returns:
+            str or None: The stored master password hash or None if not set.
+        """
+        self.c.execute("SELECT password_hash FROM master_password WHERE id = 1")
+        result = self.c.fetchone()
+        return result[0] if result else None
+
+    def _save_master_password_hash(self, password_hash):
+        """
+        Saves the master password hash to the database.
 
         Args:
-            service (str): The name of the service for which the password is being stored.
-            username (str): The username associated with the service.
-            password (str): The password to be stored for the service.
-
-        Raises:
-            EinarError: If the master password has not been set.
+            password_hash (str): The hashed master password to save.
         """
-        if self.master_password_hash is None:
-            raise EinarError("Master password must be set before adding passwords.")
-        
-        encrypted_password = self.fernet.encrypt(password.encode())
-        self.c.execute("INSERT INTO passwords (service, username, password) VALUES (?, ?, ?)", 
-                       (service, username, encrypted_password))
+        self.c.execute("INSERT INTO master_password (id, password_hash) VALUES (1, ?)", (password_hash,))
         self.conn.commit()
 
     def check_master_password(self, master_password):
-        """Checks if the provided master password matches the stored master password hash.
+        """
+        Checks if the provided master password matches the stored master password hash.
 
         Args:
             master_password (str): The master password to verify.
 
         Returns:
-            bool: True if the password is correct, False otherwise.
-
-        Raises:
-            EinarError: If the master password has not been set.
+            bool: True if the password matches, False otherwise.
         """
-        if self.master_password_hash is None:
-            raise EinarError("Master password has not been set.")
         return self._hash_password(master_password) == self.master_password_hash
 
-    def view_passwords(self, master_password):
-        """Retrieves all stored passwords after verifying the master password.
+    def _require_valid_password(self):
+        """
+        Internal method to ensure the master password has been validated before proceeding.
+        
+        Raises:
+            EinarError: If the master password is not validated.
+        """
+        if not self.password_validated:
+            raise EinarError("Master password not validated. Access denied.")
+
+    def add_password(self, service, username, password):
+        """
+        Adds a new password entry for a specified service, requires valid master password.
 
         Args:
-            master_password (str): The master password to access stored passwords.
-
-        Returns:
-            list: A list of dictionaries containing service, login, and decrypted password.
+            service (str): The service name (e.g., Gmail).
+            username (str): The username associated with the service.
+            password (str): The password to store.
 
         Raises:
-            EinarError: If the provided master password is incorrect.
+            EinarError: If the master password is not validated.
         """
-        if not self.check_master_password(master_password):
-            raise EinarError("Incorrect master password!")
+        self._require_valid_password()
+        encrypted_password = self.fernet.encrypt(password.encode())
+        self.c.execute("INSERT INTO passwords (service, username, password) VALUES (?, ?, ?)", 
+                       (service, username, encrypted_password))
+        self.conn.commit()
 
+    def view_passwords(self):
+        """
+        Retrieves all stored passwords, requires valid master password.
+
+        Returns:
+            list of dict: A list of dictionaries containing the service, username, and decrypted password.
+
+        Raises:
+            EinarError: If the master password is not validated.
+        """
+        self._require_valid_password()
         self.c.execute("SELECT service, username, password FROM passwords")
         
         passwords = []
@@ -127,22 +171,22 @@ class EinarManager:
         
         return passwords
 
-    def delete_password(self, service, master_password):
-        """Deletes the password entry for a specified service after verifying the master password.
+    def delete_password(self, service):
+        """
+        Deletes the password entry for a specified service, requires valid master password.
 
         Args:
-            service (str): The name of the service whose password entry will be deleted.
-            master_password (str): The master password to verify.
+            service (str): The service name for which the password should be deleted.
 
         Raises:
-            EinarError: If the provided master password is incorrect.
+            EinarError: If the master password is not validated.
         """
-        if not self.check_master_password(master_password):
-            raise EinarError("Incorrect master password!")
-
+        self._require_valid_password()
         self.c.execute("DELETE FROM passwords WHERE service = ?", (service,))
         self.conn.commit()
 
     def __del__(self):
-        """Closes the database connection when the EinarManager instance is deleted."""
+        """
+        Closes the database connection when the EinarManager instance is deleted.
+        """
         self.conn.close()
