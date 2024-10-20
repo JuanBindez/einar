@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=67.4.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "einar"
+version = "0.0.1"
+authors = [
+  { name="Juan Bindez", email="juanbindez780@gmail.com" },
+]
+description = "Python3 password manager library."
+readme = "README.md"
+requires-python = ">=3.7"
+license = {text = "GPLv2 license"}
+keywords = ["password", "manager", "tools", "cli", "pass",]
+classifiers = [
+	"Development Status :: 5 - Production/Stable",
+	"Environment :: Console",
+	"Intended Audience :: Developers",
+	"License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
+	"Natural Language :: English",
+	"Operating System :: OS Independent",
+	"Programming Language :: Python :: 3.7",
+	"Programming Language :: Python :: 3.8",
+	"Programming Language :: Python :: 3.9",
+	"Programming Language :: Python :: 3.10",
+	"Programming Language :: Python :: 3.11",
+	"Programming Language :: Python :: 3.12",
+	"Programming Language :: Python",
+	"Topic :: Internet",
+	"Topic :: Multimedia :: Video",
+	"Topic :: Software Development :: Libraries :: Python Modules",
+	"Topic :: Terminals",
+	"Topic :: Utilities",
+]
+dependencies = ['cryptography']
+
+[project.urls]
+"Homepage" = "https://github.com/juanbindez/einar"
+"Bug Reports" = "https://github.com/juanbindez/einar/issues"
+"Read the Docs" = "http://einar.readthedocs.io/"
+
+[project.scripts]
+einar = "einar.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["einar*"]
+
+[tool.setuptools]
+license-files = ["LICENSE"]
