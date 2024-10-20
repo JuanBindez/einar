@@ -6,7 +6,7 @@ PATCH=1
 EXTRAVERSION=""
 
 NOTES="inial release"
-BRANCH="dev"
+BRANCH="main"
 
 if [[ -z $PATCH ]]; then
     PATCH=""
