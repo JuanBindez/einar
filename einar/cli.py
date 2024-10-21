@@ -5,6 +5,7 @@ from einar.__main__ import EinarManager
 import einar.exceptions as exception
 from einar.version import __version__
 
+
 def main():
     parser = argparse.ArgumentParser(description="Einar Password Manager")
     
@@ -15,6 +16,9 @@ def main():
     parser.add_argument("-V", "--version", action="store_true", help="Show the version of Einar")
 
     args = parser.parse_args()
+
+    if args.version:
+                print(f"Einar version: {__version__}")
 
     try:
         if args.set_password:
@@ -51,9 +55,6 @@ def main():
                 service = args.delete
                 manager.delete_password(service)
                 print(f"Password for service '{service}' has been successfully deleted!")
-
-            elif args.version:
-                print(f"Einar version: {__version__}")
 
             else:
                 print("No valid command was provided. Use --help to see the available options.")

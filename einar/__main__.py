@@ -21,6 +21,7 @@ import hashlib
 from cryptography.fernet import Fernet
 import einar.exceptions as exception
 
+
 class EinarManager:
     """A simple password manager that securely stores and retrieves passwords."""
 
