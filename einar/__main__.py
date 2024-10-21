@@ -19,7 +19,7 @@
 import sqlite3
 import hashlib
 from cryptography.fernet import Fernet
-from einar.exceptions import EinarError
+import einar.exceptions as exception
 
 class EinarManager:
     """A simple password manager that securely stores and retrieves passwords."""
@@ -47,7 +47,7 @@ class EinarManager:
             if self.check_master_password(master_password):
                 self.password_validated = True
             else:
-                raise EinarError("Incorrect master password!")
+                raise exception.EinarError("Incorrect master password!")
             
     def _get_or_create_key(self):
         """Retrieves the encryption key from the database or generates a new one if not found."""
@@ -126,7 +126,7 @@ class EinarManager:
             EinarError: If the master password is not validated.
         """
         if not self.password_validated:
-            raise EinarError("Master password not validated. Access denied.")
+            raise exception.EinarError("Master password not validated. Access denied.")
 
     def add_password(self, service, username, password):
         """

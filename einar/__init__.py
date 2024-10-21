@@ -6,4 +6,3 @@ __js_url__ = None
 
 from einar.version import __version__
 from einar.__main__ import EinarManager
-from einar.exceptions import EinarError

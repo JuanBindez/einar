@@ -2,7 +2,7 @@ import argparse
 import getpass
 
 from einar.__main__ import EinarManager
-from einar.exceptions import EinarError
+import einar.exceptions as exception
 from einar.version import __version__
 
 def main():
@@ -58,7 +58,7 @@ def main():
             else:
                 print("No valid command was provided. Use --help to see the available options.")
     
-    except EinarError as e:
+    except exception.EinarError as e:
         print(f"Error: {e}")
 
 if __name__ == "__main__":
