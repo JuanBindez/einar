@@ -17,8 +17,12 @@ def main():
 
     args = parser.parse_args()
 
+    if not any(vars(args).values()):
+        parser.print_help()
+        return
+
     if args.version:
-                print(f"Einar version: {__version__}")
+        print(f"Einar version: {__version__}")
 
     try:
         if args.set_password:
