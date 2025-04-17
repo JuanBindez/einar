@@ -6,3 +6,7 @@
 <a href="https://pypi.org/project/pytubefix/"><img src="https://img.shields.io/pypi/v/einar" /></a>
 
 ## Python3 library that implements AES-128-ECB encryption.
+
+
+### Install test dev branch
+    pip install git+https://github.com/JuanBindez/einar.git@dev
