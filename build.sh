@@ -1,12 +1,14 @@
 #!/bin/bash
 
-VERSION=0
+set -e
+
+VERSION=1
 MINOR=0
-PATCH=9
-EXTRAVERSION=""
+PATCH=
+EXTRAVERSION="-rc1"
 
 NOTES="start of AES-128-ECB implementation"
-BRANCH="dev"
+BRANCH="main"
 
 if [[ -z $PATCH ]]; then
     PATCH=""

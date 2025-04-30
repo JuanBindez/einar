@@ -1,17 +1,16 @@
 from einar import AES
 
-# A chave deve ter exatamente 16 bytes (128 bits)
-chave = b''  # 16 caracteres
 
-# Inicialize o objeto AES
-cipher = AES(chave)
+key = b'' # The key must be exactly 16 bytes (128 bits)
 
-mensagem = b'Mensagem secreta para criptografar'
+cipher = AES(key)
 
-# Criptografar
-texto_cifrado = cipher.encrypt_ecb(mensagem)
-print(f"Texto cifrado (bytes): {texto_cifrado}")
+message = b'Secret message to encrypt'
 
-# Descriptografar
-texto_original = cipher.decrypt_ecb(texto_cifrado)
-print(f"Texto original: {texto_original.decode('utf-8')}")
+# Encrypt
+ciphertext = cipher.encrypt_ecb(message)
+print(f"Ciphertext (bytes): {ciphertext}")
+
+# Decrypt
+original_text = cipher.decrypt_ecb(ciphertext)
+print(f"Original text: {original_text.decode('utf-8')}")

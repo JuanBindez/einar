@@ -21,6 +21,12 @@ import einar.exceptions as exception
 import binascii
 
 class AES:
+    """Implementation of the AES (Advanced Encryption Standard) algorithm.
+    
+    This class provides AES-128 encryption and decryption functionality
+    using ECB (Electronic Codebook) mode.
+
+    """
     # Pre-calculated S-Box and Rcon tables for AES
     _s_box = (
         0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
@@ -68,6 +74,15 @@ class AES:
     )
 
     def __init__(self, key):
+        """Initialize the AES cipher with a given key.
+        
+        Args:
+            key (bytes): The encryption key (must be 16 bytes for AES-128)
+            
+        Raises:
+            ValueError: If key length is not 16 bytes
+        """
+
         if len(key) != 16:
             raise ValueError("AES-128 requires a 16-byte (128-bit) key")
         self._key = key
@@ -75,40 +90,47 @@ class AES:
 
     @classmethod
     def _sub_bytes(cls, s):
+        """Substitute bytes in state matrix using AES S-Box."""
         for i in range(4):
             for j in range(4):
                 s[i][j] = cls._s_box[s[i][j]]
 
     @classmethod
     def _inv_sub_bytes(cls, s):
+        """Inverse substitute bytes in state matrix using inverse AES S-Box."""
         for i in range(4):
             for j in range(4):
                 s[i][j] = cls._inv_s_box[s[i][j]]
 
     @staticmethod
     def _shift_rows(s):
+        """Shift rows of the state matrix according to AES specification."""
         s[0][1], s[1][1], s[2][1], s[3][1] = s[1][1], s[2][1], s[3][1], s[0][1]
         s[0][2], s[1][2], s[2][2], s[3][2] = s[2][2], s[3][2], s[0][2], s[1][2]
         s[0][3], s[1][3], s[2][3], s[3][3] = s[3][3], s[0][3], s[1][3], s[2][3]
 
     @staticmethod
     def _inv_shift_rows(s):
+        """Inverse shift rows of the state matrix."""
         s[0][1], s[1][1], s[2][1], s[3][1] = s[3][1], s[0][1], s[1][1], s[2][1]
         s[0][2], s[1][2], s[2][2], s[3][2] = s[2][2], s[3][2], s[0][2], s[1][2]
         s[0][3], s[1][3], s[2][3], s[3][3] = s[1][3], s[2][3], s[3][3], s[0][3]
 
     @staticmethod
     def _add_round_key(s, k):
+        """Add (XOR) round key to the state matrix."""
         for i in range(4):
             for j in range(4):
                 s[i][j] ^= k[i][j]
 
     @staticmethod
     def _xtime(a):
+        """AES xtime operation (Galois Field multiplication by 2)."""
         return (((a << 1) ^ 0x1B) & 0xFF) if (a & 0x80) else (a << 1)
 
     @classmethod
     def _mix_single_column(cls, a):
+        """Mix one column of the state matrix."""
         t = a[0] ^ a[1] ^ a[2] ^ a[3]
         u = a[0]
         a[0] ^= t ^ cls._xtime(a[0] ^ a[1])
@@ -118,11 +140,13 @@ class AES:
 
     @classmethod
     def _mix_columns(cls, s):
+        """Mix all columns of the state matrix."""
         for i in range(4):
             cls._mix_single_column(s[i])
 
     @classmethod
     def _inv_mix_columns(cls, s):
+        """Inverse mix all columns of the state matrix."""
         for i in range(4):
             u = cls._xtime(cls._xtime(s[i][0] ^ s[i][2]))
             v = cls._xtime(cls._xtime(s[i][1] ^ s[i][3]))
@@ -134,24 +158,29 @@ class AES:
 
     @staticmethod
     def _bytes2matrix(text):
+        """Convert 16-byte array into 4x4 state matrix."""
         return [list(text[i:i+4]) for i in range(0, len(text), 4)]
 
     @staticmethod
     def _matrix2bytes(matrix):
+        """Convert 4x4 state matrix into 16-byte array."""
         return bytes(sum(matrix, []))
 
     @staticmethod
     def _xor_bytes(a, b):
+        """XOR two byte arrays together."""
         return bytes(i^j for i, j in zip(a, b))
 
     @staticmethod
     def _pad(plaintext):
+        """Pad plaintext to be multiple of 16 bytes using PKCS#7 padding."""
         padding_len = 16 - (len(plaintext) % 16)
         padding = bytes([padding_len] * padding_len)
         return plaintext + padding
 
     @staticmethod
     def _unpad(plaintext):
+        """Remove PKCS#7 padding from plaintext."""
         padding_len = plaintext[-1]
         assert padding_len > 0
         message, padding = plaintext[:-padding_len], plaintext[-padding_len:]
@@ -160,10 +189,12 @@ class AES:
 
     @staticmethod
     def _split_blocks(message, block_size=16):
+        """Split message into 16-byte blocks."""
         return [message[i:i+16] for i in range(0, len(message), 16)]
 
     @classmethod
     def _expand_key(cls, master_key):
+        """Expand 16-byte master key into round keys."""
         key_columns = cls._bytes2matrix(master_key)
         iteration_size = len(master_key) // 4
         
@@ -183,6 +214,7 @@ class AES:
         return [key_columns[4*i : 4*(i+1)] for i in range(len(key_columns) // 4)]
 
     def _encrypt_block(self, plaintext):
+        """Encrypt a single 16-byte block of plaintext."""
         plain_state = self._bytes2matrix(plaintext)
         
         self._add_round_key(plain_state, self._expanded_key[0])
@@ -200,6 +232,7 @@ class AES:
         return self._matrix2bytes(plain_state)
 
     def _decrypt_block(self, ciphertext):
+        """Decrypt a single 16-byte block of ciphertext."""
         cipher_state = self._bytes2matrix(ciphertext)
         
         self._add_round_key(cipher_state, self._expanded_key[-1])
@@ -217,7 +250,15 @@ class AES:
         return self._matrix2bytes(cipher_state)
 
     def encrypt_ecb(self, plaintext):
-        """Encrypts data in ECB (Electronic Codebook) mode"""
+        """Encrypt data in ECB (Electronic Codebook) mode.
+        
+        Args:
+            plaintext (bytes): Data to encrypt
+            
+        Returns:
+            bytes: Encrypted ciphertext
+        """
+
         plaintext = self._pad(plaintext)
         blocks = []
         
@@ -228,7 +269,15 @@ class AES:
         return b''.join(blocks)
 
     def decrypt_ecb(self, ciphertext):
-        """Decrypts data in ECB (Electronic Codebook) mode"""
+        """Decrypt data in ECB (Electronic Codebook) mode.
+        
+        Args:
+            ciphertext (bytes): Data to decrypt
+            
+        Returns:
+            bytes: Decrypted plaintext
+        """
+
         blocks = []
         
         for ciphertext_block in self._split_blocks(ciphertext):
@@ -236,6 +285,3 @@ class AES:
             blocks.append(block)
         
         return self._unpad(b''.join(blocks))
-
-
-
