@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "einar"
-version = "0.0.1"
+version = "0.0.9"
 authors = [
   { name="Juan Bindez", email="juanbindez780@gmail.com" },
 ]
@@ -33,7 +33,6 @@ classifiers = [
 	"Topic :: Terminals",
 	"Topic :: Utilities",
 ]
-dependencies = ['cryptography']
 
 [project.urls]
 "Homepage" = "https://github.com/juanbindez/einar"

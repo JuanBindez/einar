@@ -2,11 +2,11 @@
 
 VERSION=0
 MINOR=0
-PATCH=1
+PATCH=9
 EXTRAVERSION=""
 
-NOTES="inial release"
-BRANCH="main"
+NOTES="start of AES-128-ECB implementation"
+BRANCH="dev"
 
 if [[ -z $PATCH ]]; then
     PATCH=""
