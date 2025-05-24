@@ -7,7 +7,7 @@ MINOR=0
 PATCH=0
 EXTRAVERSION=""
 
-NOTES="1.0.0 released"
+NOTES="released"
 BRANCH="main"
 
 if [[ -z $PATCH ]]; then
