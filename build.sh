@@ -4,10 +4,10 @@ set -e
 
 VERSION=1
 MINOR=0
-PATCH=
-EXTRAVERSION="-rc1"
+PATCH=0
+EXTRAVERSION=""
 
-NOTES="start of AES-128-ECB implementation"
+NOTES="1.0.0 released"
 BRANCH="main"
 
 if [[ -z $PATCH ]]; then
