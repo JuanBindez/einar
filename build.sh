@@ -2,12 +2,12 @@
 
 set -e
 
-VERSION=1
+VERSION=2
 MINOR=0
 PATCH=0
 EXTRAVERSION=""
 
-NOTES="released"
+NOTES="Implemented CBC mode for AES encryption and decryption, added key length support, and fixed minor bugs."
 BRANCH="main"
 
 if [[ -z $PATCH ]]; then

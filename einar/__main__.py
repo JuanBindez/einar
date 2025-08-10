@@ -16,18 +16,16 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-
 import einar.exceptions as exception
 import binascii
 
 class AES:
-    """Implementation of the AES (Advanced Encryption Standard) algorithm.
-    
-    This class provides AES-128 encryption and decryption functionality
-    using ECB (Electronic Codebook) mode.
-
     """
-    # Pre-calculated S-Box and Rcon tables for AES
+    Implementation of the AES (Advanced Encryption Standard) algorithm.
+    Supports AES-128, AES-192, and AES-256 in ECB and CBC modes.
+    Accepts shorter keys, automatically padding with zeros.
+    """
+
     _s_box = (
         0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0x2B, 0xFE, 0xD7, 0xAB, 0x76,
         0xCA, 0x82, 0xC9, 0x7D, 0xFA, 0x59, 0x47, 0xF0, 0xAD, 0xD4, 0xA2, 0xAF, 0x9C, 0xA4, 0x72, 0xC0,
@@ -73,215 +71,236 @@ class AES:
         0xD4, 0xB3, 0x7D, 0xFA, 0xEF, 0xC5, 0x91, 0x39,
     )
 
-    def __init__(self, key):
-        """Initialize the AES cipher with a given key.
-        
-        Args:
-            key (bytes): The encryption key (must be 16 bytes for AES-128)
-            
-        Raises:
-            ValueError: If key length is not 16 bytes
-        """
-
-        if len(key) != 16:
-            raise ValueError("AES-128 requires a 16-byte (128-bit) key")
+    def __init__(self, key, keyLen=128, mode="ECB", iv=None):
+        if keyLen not in (128, 192, 256):
+            raise ValueError("keyLen must be 128, 192, or 256 bits")
+        if mode not in ("ECB", "CBC"):
+            raise ValueError("mode must be 'ECB' or 'CBC'")
+        self._mode = mode
+        self._keyLen = keyLen
+        key_len_bytes = keyLen // 8
+        if len(key) < key_len_bytes:
+            key = key.ljust(key_len_bytes, b'\0')
+        elif len(key) > key_len_bytes:
+            key = key[:key_len_bytes]
         self._key = key
+        self._n_rounds = {128: 10, 192: 12, 256: 14}[keyLen]
         self._expanded_key = self._expand_key(key)
+        self._block_size = 16
+        if mode == "CBC":
+            if iv is None:
+                raise ValueError("CBC mode requires a 16-byte IV")
+            if len(iv) != 16:
+                raise ValueError("IV must be 16 bytes")
+            self._iv = iv
 
     @classmethod
     def _sub_bytes(cls, s):
-        """Substitute bytes in state matrix using AES S-Box."""
         for i in range(4):
             for j in range(4):
                 s[i][j] = cls._s_box[s[i][j]]
 
     @classmethod
     def _inv_sub_bytes(cls, s):
-        """Inverse substitute bytes in state matrix using inverse AES S-Box."""
         for i in range(4):
             for j in range(4):
                 s[i][j] = cls._inv_s_box[s[i][j]]
 
     @staticmethod
     def _shift_rows(s):
-        """Shift rows of the state matrix according to AES specification."""
-        s[0][1], s[1][1], s[2][1], s[3][1] = s[1][1], s[2][1], s[3][1], s[0][1]
-        s[0][2], s[1][2], s[2][2], s[3][2] = s[2][2], s[3][2], s[0][2], s[1][2]
-        s[0][3], s[1][3], s[2][3], s[3][3] = s[3][3], s[0][3], s[1][3], s[2][3]
+        # Transpose the matrix for easier row manipulation
+        s = [list(row) for row in zip(*s)]
+        s[1] = s[1][1:] + s[1][:1]
+        s[2] = s[2][2:] + s[2][:2]
+        s[3] = s[3][3:] + s[3][:3]
+        # Transpose back
+        return [list(row) for row in zip(*s)]
 
     @staticmethod
     def _inv_shift_rows(s):
-        """Inverse shift rows of the state matrix."""
-        s[0][1], s[1][1], s[2][1], s[3][1] = s[3][1], s[0][1], s[1][1], s[2][1]
-        s[0][2], s[1][2], s[2][2], s[3][2] = s[2][2], s[3][2], s[0][2], s[1][2]
-        s[0][3], s[1][3], s[2][3], s[3][3] = s[1][3], s[2][3], s[3][3], s[0][3]
-
+        # Transpose the matrix for easier row manipulation
+        s = [list(row) for row in zip(*s)]
+        s[1] = s[1][3:] + s[1][:3]
+        s[2] = s[2][2:] + s[2][:2]
+        s[3] = s[3][1:] + s[3][:1]
+        # Transpose back
+        return [list(row) for row in zip(*s)]
+        
     @staticmethod
     def _add_round_key(s, k):
-        """Add (XOR) round key to the state matrix."""
         for i in range(4):
             for j in range(4):
                 s[i][j] ^= k[i][j]
 
     @staticmethod
-    def _xtime(a):
-        """AES xtime operation (Galois Field multiplication by 2)."""
-        return (((a << 1) ^ 0x1B) & 0xFF) if (a & 0x80) else (a << 1)
-
-    @classmethod
-    def _mix_single_column(cls, a):
-        """Mix one column of the state matrix."""
-        t = a[0] ^ a[1] ^ a[2] ^ a[3]
-        u = a[0]
-        a[0] ^= t ^ cls._xtime(a[0] ^ a[1])
-        a[1] ^= t ^ cls._xtime(a[1] ^ a[2])
-        a[2] ^= t ^ cls._xtime(a[2] ^ a[3])
-        a[3] ^= t ^ cls._xtime(a[3] ^ u)
+    def _gmul(a, b):
+        p = 0
+        while b > 0:
+            if b & 1:
+                p ^= a
+            a = (a << 1)
+            if a & 0x100:
+                a ^= 0x11b
+            b >>= 1
+        return p
 
     @classmethod
     def _mix_columns(cls, s):
-        """Mix all columns of the state matrix."""
         for i in range(4):
-            cls._mix_single_column(s[i])
+            col = [s[0][i], s[1][i], s[2][i], s[3][i]]
+            s[0][i] = cls._gmul(0x02, col[0]) ^ cls._gmul(0x03, col[1]) ^ col[2] ^ col[3]
+            s[1][i] = col[0] ^ cls._gmul(0x02, col[1]) ^ cls._gmul(0x03, col[2]) ^ col[3]
+            s[2][i] = col[0] ^ col[1] ^ cls._gmul(0x02, col[2]) ^ cls._gmul(0x03, col[3])
+            s[3][i] = cls._gmul(0x03, col[0]) ^ col[1] ^ col[2] ^ cls._gmul(0x02, col[3])
 
     @classmethod
     def _inv_mix_columns(cls, s):
-        """Inverse mix all columns of the state matrix."""
         for i in range(4):
-            u = cls._xtime(cls._xtime(s[i][0] ^ s[i][2]))
-            v = cls._xtime(cls._xtime(s[i][1] ^ s[i][3]))
-            s[i][0] ^= u
-            s[i][1] ^= v
-            s[i][2] ^= u
-            s[i][3] ^= v
-        cls._mix_columns(s)
+            col = [s[0][i], s[1][i], s[2][i], s[3][i]]
+            s[0][i] = cls._gmul(0x0e, col[0]) ^ cls._gmul(0x0b, col[1]) ^ cls._gmul(0x0d, col[2]) ^ cls._gmul(0x09, col[3])
+            s[1][i] = cls._gmul(0x09, col[0]) ^ cls._gmul(0x0e, col[1]) ^ cls._gmul(0x0b, col[2]) ^ cls._gmul(0x0d, col[3])
+            s[2][i] = cls._gmul(0x0d, col[0]) ^ cls._gmul(0x09, col[1]) ^ cls._gmul(0x0e, col[2]) ^ cls._gmul(0x0b, col[3])
+            s[3][i] = cls._gmul(0x0b, col[0]) ^ cls._gmul(0x0d, col[1]) ^ cls._gmul(0x09, col[2]) ^ cls._gmul(0x0e, col[3])
 
     @staticmethod
     def _bytes2matrix(text):
-        """Convert 16-byte array into 4x4 state matrix."""
         return [list(text[i:i+4]) for i in range(0, len(text), 4)]
 
     @staticmethod
     def _matrix2bytes(matrix):
-        """Convert 4x4 state matrix into 16-byte array."""
         return bytes(sum(matrix, []))
 
     @staticmethod
     def _xor_bytes(a, b):
-        """XOR two byte arrays together."""
         return bytes(i^j for i, j in zip(a, b))
 
     @staticmethod
     def _pad(plaintext):
-        """Pad plaintext to be multiple of 16 bytes using PKCS#7 padding."""
         padding_len = 16 - (len(plaintext) % 16)
         padding = bytes([padding_len] * padding_len)
         return plaintext + padding
 
     @staticmethod
     def _unpad(plaintext):
-        """Remove PKCS#7 padding from plaintext."""
+        if not plaintext:
+            return b''
         padding_len = plaintext[-1]
-        assert padding_len > 0
+        if padding_len > 16 or padding_len == 0:
+            raise exception.PaddingError("Invalid padding")
         message, padding = plaintext[:-padding_len], plaintext[-padding_len:]
-        assert all(p == padding_len for p in padding)
+        if not all(p == padding_len for p in padding):
+            raise exception.PaddingError("Invalid padding")
         return message
 
     @staticmethod
     def _split_blocks(message, block_size=16):
-        """Split message into 16-byte blocks."""
         return [message[i:i+16] for i in range(0, len(message), 16)]
 
     @classmethod
+    def _rot_word(cls, word):
+        return word[1:] + word[:1]
+
+    @classmethod
+    def _sub_word(cls, word):
+        return [cls._s_box[b] for b in word]
+
+    @classmethod
     def _expand_key(cls, master_key):
-        """Expand 16-byte master key into round keys."""
-        key_columns = cls._bytes2matrix(master_key)
-        iteration_size = len(master_key) // 4
+        key_len = len(master_key)
+        assert key_len in (16, 24, 32)
+        n_rounds = {16: 10, 24: 12, 32: 14}[key_len]
+        key_words = [list(master_key[i:i+4]) for i in range(0, len(master_key), 4)]
         
         i = 1
-        while len(key_columns) < (10 + 1) * 4:
-            word = list(key_columns[-1])
-            
-            if len(key_columns) % iteration_size == 0:
-                word.append(word.pop(0))
-                word = [cls._s_box[b] for b in word]
-                word[0] ^= cls._r_con[i]
+        while len(key_words) < (n_rounds + 1) * 4:
+            temp = list(key_words[-1])
+            if len(key_words) % (key_len // 4) == 0:
+                temp = cls._rot_word(temp)
+                temp = cls._sub_word(temp)
+                temp[0] ^= cls._r_con[i]
                 i += 1
+            elif key_len == 32 and len(key_words) % (key_len // 4) == 4:
+                temp = cls._sub_word(temp)
             
-            word = cls._xor_bytes(word, key_columns[-iteration_size])
-            key_columns.append(word)
+            prev_word = key_words[len(key_words) - (key_len // 4)]
+            new_word = [temp[j] ^ prev_word[j] for j in range(4)]
+            key_words.append(new_word)
         
-        return [key_columns[4*i : 4*(i+1)] for i in range(len(key_columns) // 4)]
+        expanded_key = []
+        for i in range(n_rounds + 1):
+            round_key = [key_words[4*i], key_words[4*i+1], key_words[4*i+2], key_words[4*i+3]]
+            expanded_key.append(round_key)
+        
+        return expanded_key
 
     def _encrypt_block(self, plaintext):
-        """Encrypt a single 16-byte block of plaintext."""
-        plain_state = self._bytes2matrix(plaintext)
-        
-        self._add_round_key(plain_state, self._expanded_key[0])
-        
-        for i in range(1, 10):
-            self._sub_bytes(plain_state)
-            self._shift_rows(plain_state)
-            self._mix_columns(plain_state)
-            self._add_round_key(plain_state, self._expanded_key[i])
-        
-        self._sub_bytes(plain_state)
-        self._shift_rows(plain_state)
-        self._add_round_key(plain_state, self._expanded_key[-1])
-        
-        return self._matrix2bytes(plain_state)
+        state = self._bytes2matrix(plaintext)
+        self._add_round_key(state, self._expanded_key[0])
+        for i in range(1, self._n_rounds):
+            self._sub_bytes(state)
+            state = self._shift_rows(state)
+            self._mix_columns(state)
+            self._add_round_key(state, self._expanded_key[i])
+        self._sub_bytes(state)
+        state = self._shift_rows(state)
+        self._add_round_key(state, self._expanded_key[self._n_rounds])
+        return self._matrix2bytes(state)
 
     def _decrypt_block(self, ciphertext):
-        """Decrypt a single 16-byte block of ciphertext."""
-        cipher_state = self._bytes2matrix(ciphertext)
-        
-        self._add_round_key(cipher_state, self._expanded_key[-1])
-        self._inv_shift_rows(cipher_state)
-        self._inv_sub_bytes(cipher_state)
-        
-        for i in range(9, 0, -1):
-            self._add_round_key(cipher_state, self._expanded_key[i])
-            self._inv_mix_columns(cipher_state)
-            self._inv_shift_rows(cipher_state)
-            self._inv_sub_bytes(cipher_state)
-        
-        self._add_round_key(cipher_state, self._expanded_key[0])
-        
-        return self._matrix2bytes(cipher_state)
+        state = self._bytes2matrix(ciphertext)
+        self._add_round_key(state, self._expanded_key[self._n_rounds])
+        state = self._inv_shift_rows(state)
+        self._inv_sub_bytes(state)
+        for i in range(self._n_rounds - 1, 0, -1):
+            self._add_round_key(state, self._expanded_key[i])
+            self._inv_mix_columns(state)
+            state = self._inv_shift_rows(state)
+            self._inv_sub_bytes(state)
+        self._add_round_key(state, self._expanded_key[0])
+        return self._matrix2bytes(state)
 
     def encrypt_ecb(self, plaintext):
-        """Encrypt data in ECB (Electronic Codebook) mode.
-        
-        Args:
-            plaintext (bytes): Data to encrypt
-            
-        Returns:
-            bytes: Encrypted ciphertext
-        """
-
         plaintext = self._pad(plaintext)
         blocks = []
-        
         for plaintext_block in self._split_blocks(plaintext):
-            block = self._encrypt_block(plaintext_block)
-            blocks.append(block)
-        
+            blocks.append(self._encrypt_block(plaintext_block))
         return b''.join(blocks)
 
     def decrypt_ecb(self, ciphertext):
-        """Decrypt data in ECB (Electronic Codebook) mode.
-        
-        Args:
-            ciphertext (bytes): Data to decrypt
-            
-        Returns:
-            bytes: Decrypted plaintext
-        """
-
         blocks = []
-        
         for ciphertext_block in self._split_blocks(ciphertext):
-            block = self._decrypt_block(ciphertext_block)
+            blocks.append(self._decrypt_block(ciphertext_block))
+        return self._unpad(b''.join(blocks))
+
+    def encrypt(self, plaintext):
+        if self._mode == "ECB":
+            return self.encrypt_ecb(plaintext)
+        elif self._mode == "CBC":
+            return self.encrypt_cbc(plaintext)
+
+    def decrypt(self, ciphertext):
+        if self._mode == "ECB":
+            return self.decrypt_ecb(ciphertext)
+        elif self._mode == "CBC":
+            return self.decrypt_cbc(ciphertext)
+
+    def encrypt_cbc(self, plaintext):
+        plaintext = self._pad(plaintext)
+        blocks = []
+        prev = self._iv
+        for plaintext_block in self._split_blocks(plaintext):
+            block = self._xor_bytes(plaintext_block, prev)
+            encrypted_block = self._encrypt_block(block)
+            blocks.append(encrypted_block)
+            prev = encrypted_block
+        return b''.join(blocks)
+
+    def decrypt_cbc(self, ciphertext):
+        blocks = []
+        prev = self._iv
+        for ciphertext_block in self._split_blocks(ciphertext):
+            decrypted_block = self._decrypt_block(ciphertext_block)
+            block = self._xor_bytes(decrypted_block, prev)
             blocks.append(block)
-        
+            prev = ciphertext_block
         return self._unpad(b''.join(blocks))
