@@ -8,7 +8,7 @@ version = "2.0.0"
 authors = [
   { name="Juan Bindez", email="juanbindez780@gmail.com" },
 ]
-description = "Python3 password manager library."
+description = "Python3 library that implements AES-128, AES-192, AES-256 encryption in ECB and CBC modes. ."
 readme = "README.md"
 requires-python = ">=3.7"
 license = {text = "GPLv2 license"}
